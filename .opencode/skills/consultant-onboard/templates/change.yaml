@@ -1,0 +1,17 @@
+# Change state. Each entry: status (not_run | running | done), version (0 = none), file.
+slug: <slug>
+description: <description>
+created: <date>
+tools:
+  mece:       { status: not_run, version: 0, file: null }
+  ishikawa:   { status: not_run, version: 0, file: null }
+  de_bono:    { status: not_run, version: 0, file: null }
+  red_team:   { status: not_run, version: 0, file: null }
+  wardley:    { status: not_run, version: 0, file: null }
+  premortem:  { status: not_run, version: 0, file: null }
+  fmea:       { status: not_run, version: 0, file: null }
+documents:
+  prd:  { status: not_run, version: 0, file: null }
+  adr:  { status: not_run, version: 0, file: null }
+  spec: { status: not_run, version: 0, file: null }
+report: { status: not_run, version: 0, file: null }

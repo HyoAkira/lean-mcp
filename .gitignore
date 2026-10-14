@@ -1,0 +1,6 @@
+node_modules/
+dist/
+
+# Lean build artefacts
+lean-project/.lake/
+lean-project/.lean-mcp-tmp/

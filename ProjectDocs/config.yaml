@@ -1,0 +1,8 @@
+# Consultant framework configuration
+framework: consultant
+version: 1
+project_name: lean-mcp
+language: en
+changes_dir: changes
+archive_dir: archive
+project_file: project.md
