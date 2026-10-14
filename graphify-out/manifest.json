@@ -6,10 +6,10 @@
     "semantic_hash": "c8ee80b8ca0f2da7db722c7a523ee4ae"
   },
   "package.json": {
-    "mtime": 1791849277.849863,
-    "seen": 1791852493.9584177,
-    "ast_hash": "c4a6d98193bff91afbe3d0fc14a4b4d0",
-    "semantic_hash": "c4a6d98193bff91afbe3d0fc14a4b4d0"
+    "mtime": 1791990803.2882774,
+    "seen": 1791990907.3842244,
+    "ast_hash": "dadf358c8079ea87bc812b276ee677f0",
+    "semantic_hash": ""
   },
   "scripts/robustness.mjs": {
     "mtime": 1791849212.0262623,
@@ -78,9 +78,177 @@
     "semantic_hash": "779a7496aaa43bf2e76d3da3ac754544"
   },
   "README.md": {
-    "mtime": 1791849329.5813382,
-    "seen": 1791852493.9584343,
-    "ast_hash": "d8595e829cb70c8e0a8eb347ad781565",
-    "semantic_hash": "d8595e829cb70c8e0a8eb347ad781565"
+    "mtime": 1791990807.3523161,
+    "seen": 1791990907.3843036,
+    "ast_hash": "b7305f54bb45cf6c1e4d5310bdd0b2fa",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/README.md": {
+    "mtime": 1791855309.0,
+    "seen": 1791990907.3842545,
+    "ast_hash": "02d13b8b439d0fba78d9b37f0ead8d1f",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/consultant-archive/SKILL.md": {
+    "mtime": 1791855878.0,
+    "seen": 1791990907.3842568,
+    "ast_hash": "bbab4afea6585d1b58b1c03367c9cbe2",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/consultant-de-bono/SKILL.md": {
+    "mtime": 1791855718.0,
+    "seen": 1791990907.384259,
+    "ast_hash": "8b40776ad7924c173e252851127e03e6",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/consultant-de-bono/templates/de-bono.md": {
+    "mtime": 1791855338.0,
+    "seen": 1791990907.384261,
+    "ast_hash": "b4fd95f689854efdb92d580869123be5",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/consultant-document/SKILL.md": {
+    "mtime": 1791855718.0,
+    "seen": 1791990907.3842623,
+    "ast_hash": "e7b3442b342f7351c5ed45a0fd121e5e",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/consultant-document/templates/adr.md": {
+    "mtime": 1791855702.0,
+    "seen": 1791990907.384264,
+    "ast_hash": "064ed57892d7e35c696460a09b463adb",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/consultant-document/templates/prd.md": {
+    "mtime": 1791855364.0,
+    "seen": 1791990907.3842654,
+    "ast_hash": "440b0ab0f1e14aabc44f78541a786763",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/consultant-document/templates/spec.md": {
+    "mtime": 1791855367.0,
+    "seen": 1791990907.3842673,
+    "ast_hash": "374e9bea2fe6e6b77963a68be6c1f65d",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/consultant-fmea/SKILL.md": {
+    "mtime": 1791855718.0,
+    "seen": 1791990907.3842697,
+    "ast_hash": "80818bbf539e44d6020cd084a44ceb21",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/consultant-fmea/templates/fmea.md": {
+    "mtime": 1791855710.0,
+    "seen": 1791990907.3842711,
+    "ast_hash": "73cabd76af6c613628c19a5be56d8810",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/consultant-ishikawa/SKILL.md": {
+    "mtime": 1791855718.0,
+    "seen": 1791990907.3842726,
+    "ast_hash": "d2b8506f825c9c2b02f12c8fd3247d30",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/consultant-ishikawa/templates/ishikawa.md": {
+    "mtime": 1791855334.0,
+    "seen": 1791990907.3842742,
+    "ast_hash": "10575906c31623d24cfa63625a3239ff",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/consultant-mece/SKILL.md": {
+    "mtime": 1791855718.0,
+    "seen": 1791990907.3842754,
+    "ast_hash": "8ac13be8545b7e8a76e9ddf139e4efb3",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/consultant-mece/templates/mece.md": {
+    "mtime": 1791855329.0,
+    "seen": 1791990907.384277,
+    "ast_hash": "17c5a9a5b35870eccb40b07911a83387",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/consultant-onboard/SKILL.md": {
+    "mtime": 1791855718.0,
+    "seen": 1791990907.3842788,
+    "ast_hash": "44fc3165fe27ba429b73b895017e0c12",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/consultant-onboard/templates/change.yaml": {
+    "mtime": 1791855318.0,
+    "seen": 1791990907.3842807,
+    "ast_hash": "86dda36af742d5a6be537471e20bf488",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/consultant-onboard/templates/config.yaml": {
+    "mtime": 1791855317.0,
+    "seen": 1791990907.3842819,
+    "ast_hash": "eda69a5ff953a21c161f3a5544b6f728",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/consultant-onboard/templates/project.md": {
+    "mtime": 1791855319.0,
+    "seen": 1791990907.3842833,
+    "ast_hash": "82144d27e364080ab8206fe16fe9118b",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/consultant-premortem/SKILL.md": {
+    "mtime": 1791855720.0,
+    "seen": 1791990907.384285,
+    "ast_hash": "635559da2b51db0511d4da640f0c2d32",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/consultant-premortem/templates/premortem.md": {
+    "mtime": 1791855349.0,
+    "seen": 1791990907.3842862,
+    "ast_hash": "d9eebaa13b1709342c1d12ecac8dfcd0",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/consultant-red-team/SKILL.md": {
+    "mtime": 1791855720.0,
+    "seen": 1791990907.3842878,
+    "ast_hash": "e5f5f91fbaa5517127f629dc9c75dab6",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/consultant-red-team/templates/red-team.md": {
+    "mtime": 1791855342.0,
+    "seen": 1791990907.3842893,
+    "ast_hash": "c0963e089f45f6ac2ec5b800cf07815f",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/consultant-report/SKILL.md": {
+    "mtime": 1791855718.0,
+    "seen": 1791990907.3842914,
+    "ast_hash": "ab9eea6810cb52d82776eaa3aeb222cf",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/consultant-report/templates/report.md": {
+    "mtime": 1791855371.0,
+    "seen": 1791990907.3842928,
+    "ast_hash": "81aeb3d0c9aa8635cdd122d23f56722b",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/consultant-wardley/SKILL.md": {
+    "mtime": 1791855718.0,
+    "seen": 1791990907.3842945,
+    "ast_hash": "7eca00b9d0e040973fb335ca007d73b6",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/consultant-wardley/templates/wardley.md": {
+    "mtime": 1791855346.0,
+    "seen": 1791990907.3842962,
+    "ast_hash": "175843cd5312414e7eb790e8e335dc9b",
+    "semantic_hash": ""
+  },
+  "ProjectDocs/config.yaml": {
+    "mtime": 1791855996.3501246,
+    "seen": 1791990907.3843,
+    "ast_hash": "8b7818cb2d404890dd3027ca28b36aec",
+    "semantic_hash": ""
+  },
+  "ProjectDocs/project.md": {
+    "mtime": 1791855996.3501246,
+    "seen": 1791990907.384302,
+    "ast_hash": "97ae4d472e97b04cfdcda7c5299bffe3",
+    "semantic_hash": ""
   }
 }
