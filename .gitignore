@@ -4,3 +4,7 @@ dist/
 # Lean build artefacts
 lean-project/.lake/
 lean-project/.lean-mcp-tmp/
+
+# Tool and experiment artefacts
+.serena/
+eval/
