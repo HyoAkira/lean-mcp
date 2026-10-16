@@ -1,37 +1,120 @@
 # Lean MCP
 
-Lean 4 kodunu yerel derleyicide çalıştıran ve derleyicinin geri bildirimini
-yapılandırılmış bir yanıtla döndüren MCP sunucusu. Tek araç sunar: `lean_check`.
+An MCP server that compiles Lean 4 code with the local Lean toolchain and
+returns the compiler's feedback in a structured response. It exposes a single
+tool, `lean_check`. Mathlib and the basic Lean library are available to the
+compiled snippets.
 
-## Gereksinimler
+## What it is
 
-| Bileşen | Sürüm |
-|---|---|
-| Node.js | ≥ 20 |
-| Lean 4 (elan ile) | `v4.34.1` |
-| Mathlib | `v4.34.1` |
+`lean-mcp` is a small, self-contained Model Context Protocol (MCP) server for
+proof work. A client (for example OpenCode) sends Lean source code to the
+`lean_check` tool; the server writes the snippet into a Lake project, elaborates
+it with the real Lean compiler, and returns a structured verdict. Success is
+never taken from the model: a declaration counts as proved only if the Lean
+elaborator accepts it. The server speaks MCP over stdio (`src/index.ts`).
 
-## Kurulum
+## Features
+
+- **One tool with a fixed contract.** `lean_check` accepts a single `code`
+  string and returns exactly `status`, `summary` and `diagnostics`. The output
+  shape is declared with Zod so `structuredContent` stays spec-compliant
+  (`src/index.ts`).
+- **Real compilation.** Snippets are elaborated by the local Lean toolchain
+  through `lake env lean --json`; the verdict is the compiler's, not the
+  model's (`src/lean.ts`).
+- **Parsed, structured diagnostics.** Lean's JSON messages are parsed and
+  rendered as `line:col: severity: text` strings (`src/lean.ts`).
+- **Errors, warnings and information all reach the model.** A rejected proof
+  returns its errors; a successful file keeps its warnings and `information`
+  output, so the answers to `#check` / `#print` / `#eval` are not dropped
+  (`src/lean.ts`).
+- **`sorry` is flagged.** A file that compiles with `sorry` returns
+  `status: "success"`, but the `summary` states that the proof is unfinished, so
+  a hollow proof is not mistaken for a real one (`src/lean.ts`).
+- **Actionable failure hints.** On failure the `summary` appends a one-line hint
+  keyed to the failure class (`unsolved goals`, `unknown identifier`, syntax
+  errors, and others) (`src/lean.ts`).
+- **Serialized execution.** Concurrent tool calls run through a queue and each
+  gets its own scratch file, so results cannot cross (`src/lean.ts`).
+- **Timeouts terminate the whole process tree.** A stuck tactic is stopped with
+  SIGTERM, then SIGKILL, and the server never blocks (`src/lean.ts`,
+  `src/config.ts`).
+- **Clean shutdown, no orphans.** SIGTERM, SIGINT, SIGHUP or a closed stdin
+  aborts in-flight compilations by process group, so no `lake` or `lean`
+  subprocess is left running (`src/index.ts`, `src/lean.ts`).
+- **Structured failures when misconfigured.** A missing or read-only project
+  directory returns a structured tool error instead of a raw OS error
+  (`src/lean.ts`), and startup environment problems are reported on stderr
+  (`src/index.ts`).
+
+## Tech stack
+
+| Component | Version | Source |
+|---|---|---|
+| Node.js | >= 20 | `package.json` (`engines`) |
+| TypeScript | ^5.7 | `package.json` (`devDependencies`) |
+| `@modelcontextprotocol/sdk` | ^1.12.0 | `package.json` (`dependencies`) |
+| `zod` | ^3.23.8 | `package.json` (`dependencies`) |
+| Lean 4 | `v4.34.1` (via elan) | `lean-project/lean-toolchain` |
+| Mathlib | `v4.34.1` | `lean-project/lakefile.lean` |
+| Lake | shipped with the Lean toolchain | `lean-project/lakefile.lean` |
+
+## Architecture
+
+```
+MCP client (e.g. OpenCode)
+        |  stdio: tools/call lean_check { code }
+        v
+src/index.ts   McpServer "lean-mcp", registerTool "lean_check"
+        |
+        v
+src/lean.ts    LeanChecker: serial queue, timeout, process-group kill
+        |  writes  <LEAN_MCP_PROJECT_DIR>/.lean-mcp-tmp/Check_<uuid>.lean
+        v
+lake env lean --json <file>        cwd = LEAN_MCP_PROJECT_DIR
+        |  newline-delimited JSON messages on stdout
+        v
+parseJsonMessages -> classify -> { status, summary, diagnostics }
+```
+
+The entry point is `dist/index.js` (`package.json`, `bin` and `start`). The
+scratch file is written inside the Lake project so the snippet picks up Mathlib
+through `LEAN_PATH` (`src/lean.ts`).
+
+## Getting started
+
+### Prerequisites
+
+- Node.js >= 20 (`package.json`).
+- Lean 4 `v4.34.1`, installed with elan (`lean-project/lean-toolchain`).
+
+### Install and build
 
 ```bash
 npm install
 npm run build
+```
 
-# Lean araç zinciri
+### Lean toolchain and Mathlib
+
+```bash
+# Lean 4 toolchain (matches lean-project/lean-toolchain)
 elan toolchain install leanprover/lean4:v4.34.1
 
-# Mathlib bağımlılığını indir ve önceden derlenmiş .olean dosyalarını çek
+# Fetch Mathlib and its prebuilt .olean files
 cd lean-project
 lake exe cache get
 lake build
 ```
 
-`lake build` bir kez çalıştırıldıktan sonra `lean_check` aracı Mathlib'e karşı
-kod derleyebilir. Derleme süresi Mathlib önbelleğinin alınmasına bağlıdır.
+Once `lake build` has run, `lean_check` can compile code against Mathlib.
+Compilation time depends on the Mathlib cache being present
+(`src/lean.ts`).
 
-## OpenCode'a bağlama
+### Connect it to OpenCode
 
-`~/.config/opencode/opencode.json` içine ekleyin:
+Add the server under `mcp.servers` in `~/.config/opencode/opencode.json`:
 
 ```json
 {
@@ -39,36 +122,37 @@ kod derleyebilir. Derleme süresi Mathlib önbelleğinin alınmasına bağlıdı
     "servers": {
       "lean": {
         "type": "local",
-        "command": ["node"],
+        "command": ["node", "/path/to/lean-mcp/dist/index.js"],
         "environment": {
           "LEAN_MCP_PROJECT_DIR": "/path/to/lean-mcp/lean-project"
-        },
-        "enabled": true
+        }
       }
     }
   }
 }
 ```
 
-Sunucu stdio üzerinden konuşur. Lean MCP, teorem arama işini **yeniden
-uygulamaz**; bunun için `lean-explore` hosted MCP ayrı bir sunucu olarak
-tanımlanır ve `lean_check` LeanExplore olmadan da çalışır.
+`command` is the executable followed by its arguments; naming the built entry
+point `dist/index.js` is what starts the server. The server speaks MCP over
+stdio (`src/index.ts`). Theorem search is deliberately not reimplemented here:
+that is a separate server (`lean-explore`, a hosted MCP), and `lean_check` works
+without it.
 
-## Araç sözleşmesi
+## Usage
 
 ### `lean_check`
 
-**Girdi**
+**Input**
 
 ```json
 { "code": "theorem add_two : 1 + 1 = 2 := by rfl" }
 ```
 
-> Not: `example` Lean'de ayrılmış bir anahtar kelimedir; `theorem example : ...`
-> geçersizdir. İsimli teorem yazarken `theorem add_two : ...`, isimsiz yazarken
-> `example : ...` kullanın.
+> Note: `example` is a reserved keyword in Lean, so `theorem example : ...` is
+> invalid. Use a named theorem such as `theorem add_two : ...`, or
+> `example : ...` for an anonymous one.
 
-**Başarılı yanıt**
+**Successful response**
 
 ```json
 {
@@ -78,141 +162,161 @@ tanımlanır ve `lean_check` LeanExplore olmadan da çalışır.
 }
 ```
 
-**Hatalı yanıt**
+(`summary` reads: "Lean compiled the code successfully.")
+
+**Failed response**
 
 ```json
 {
   "status": "error",
-  "summary": "Lean kodu derlenemedi.",
+  "summary": "Lean kodu derlenemedi. İpucu: bilinmeyen bir isim kullanıldı; doğru lemma/sabit adını `#check` veya `lean-explore` ile doğrulayın.",
   "diagnostics": ["3:11: error: Unknown constant `Nat.succcccc`"]
 }
 ```
 
-`status` yalnızca `success` veya `error` olur. Başarı, kodun gerçekten
-derlenmesiyle belirlenir; modelin kendi değerlendirmesi dikkate alınmaz.
+(`summary` reads: "Lean could not compile the code. Hint: an unknown name was
+used; verify the correct lemma/constant name with `#check` or `lean-explore`.")
 
-**`isError` semantiği.** Araç yalnızca *araç* başarısız olduğunda (`isError:
-true`) işaretlenir: Lean araç zinciri yok ya da derleme zaman aşımına uğradı.
-Derleyicinin kodu reddetmesi normal, beklenen bir sonuçtur ve `isError: false`
-ile `status: "error"` olarak döner. Böylece model her başarısız denemeyi bir
-araç arızası gibi değil, üzerinde yinelenecek bir derleyici kararı olarak görür.
+The `summary` and hint strings above are the exact text `src/lean.ts` produces
+in the current build; they are quoted verbatim. The compiler messages in
+`diagnostics` come from Lean itself. `status` is only ever `success` or `error`.
+Success is decided by whether the code actually compiles; the model's own
+assessment is not used (`src/lean.ts`).
 
-**Bilgi ve uyarı mesajları.** `severity: "error"` dışındaki mesajlar
-`diagnostics` içinde modele ulaşır. Bu, `#check`/`#print`/`#eval` çıktılarını
-(ör. `#check Nat.add_comm` → `Nat.add_comm (n m : Nat) : n + m = m + n`) ve
-`declaration uses `sorry`` uyarısını kapsar. `sorry` içeren bir dosya derlenir
-(`status: "success"`) ama `summary` bunu açıkça belirtir, böylece boş bir ispat
-tamamlanmış sanılmaz.
+**`isError` semantics.** The tool is marked `isError: true` only when the *tool*
+fails: the Lean toolchain is missing or the compilation times out. The compiler
+rejecting the code is the normal, expected outcome and is returned as
+`isError: false` with `status: "error"`. The model then treats each failed
+attempt as a compiler verdict to iterate on, not as a tool failure
+(`src/index.ts`).
 
-**Hata ipuçları.** Derleme başarısız olduğunda `summary` hatanın türüne göre
-tek satırlık bir ipucu taşır (ör. `unsolved goals` → bir taktik önerisi;
-`unknown identifier` → `#check`/`lean-explore` ile ad doğrulama; söz dizimi
-hatası → notasyon kontrolü). Ayrıca hataya eşlik eden uyarı/bilgi mesajları da
-`diagnostics` içinde korunur; böylece model aynı denemeden maksimum bağlam alır.
+**Information and warning messages.** Messages other than `severity: "error"`
+reach the model in `diagnostics`. This covers `#check` / `#print` / `#eval`
+output (for example `#check Nat.add_comm` gives
+`Nat.add_comm (n m : Nat) : n + m = m + n`) and the
+``declaration uses `sorry` `` warning. A file containing `sorry` compiles
+(`status: "success"`) but the `summary` says so, so an empty proof is not taken
+as finished (`src/lean.ts`).
 
-## Yapılandırma
+**Failure hints.** When compilation fails, the `summary` carries a one-line hint
+keyed to the failure class (for example `unsolved goals` gets a tactic
+suggestion; `unknown identifier` means verify the name with `#check` or
+`lean-explore`; a syntax error means check the notation). Warning and information
+messages that accompany the
+error are kept in `diagnostics`, so the model gets maximum context from a single
+attempt (`src/lean.ts`).
 
-| Değişken | Varsayılan | Açıklama |
+### Configuration
+
+| Variable | Default | Description |
 |---|---|---|
-| `LEAN_MCP_PROJECT_DIR` | `./lean-project` | Lean projesinin bulunduğu dizin |
-| `LEAN_MCP_TIMEOUT_MS` | `180000` | Tek derleme denemesi için süre sınırı |
-| `LEAN_MCP_MAX_OUTPUT_BYTES` | `262144` | Yakalanan derleyici çıktısı üst sınırı |
-| `ELAN_HOME` | `~/.elan` | elan kurulum dizini; PATH'e otomatik eklenir |
+| `LEAN_MCP_PROJECT_DIR` | `./lean-project` | Directory of the Lake project to elaborate against |
+| `LEAN_MCP_TIMEOUT_MS` | `180000` | Time limit for a single compilation attempt |
+| `LEAN_MCP_MAX_OUTPUT_BYTES` | `262144` | Upper bound on captured compiler output |
+| `ELAN_HOME` | `~/.elan` | elan installation directory; its `bin` is added to `PATH` |
 
-## Tasarım notları
+### Design notes
 
-- **JSON çıktı ayrıştırma.** Snippet'ler `lake env lean --json` ile
-  derlenir. Lean'in JSON mesajları güvenilir biçimde ayrıştırılabilir; alıcı,
-  `severity: "error"` içeren bir mesaj varsa ispat başarısızdır. Yalnızca uyarı
-  ve bilgi mesajları varsa kod başarıyla derlenmiş sayılır ve uyarılar
-  `diagnostics` içinde döner.
-- **Seri çalıştırma.** Eşzamanlı araç çağrıları bir kuyruk üzerinden sırayla
-  yürütülür; böylece her çağrı kendi benzersiz geçici dosyasını alır ve
-  scratch dosyaları birbirine karışmaz.
-- **Zaman aşımı.** `simp`, `decide` ve `norm_num` çağrıları sonsuza kadar
-  sürebilir. Süre aşımında süreç grubu SIGTERM, ardından SIGKILL ile
-  sonlandırılır ve modele sadeleştirme önerisiyle `error` döner.
-- **Geçici dosyalar.** Snippet'ler proje içindeki `.lean-mcp-tmp/` altına
-  yazılır (Mathlib'in `LEAN_PATH` içinde görünmesi için) ve her çağrıdan sonra
-  silinir. Sunucu başlarken önceki bir çökmeden kalan `Check_*.lean` dosyaları
-  bir kez temizlenir.
+- **JSON output parsing.** Snippets are compiled with `lake env lean --json`.
+  Lean's JSON messages parse reliably; the receiver treats the proof as failed
+  when any message has `severity: "error"`. If only warnings and information
+  are present the code is considered compiled, and the warnings are returned in
+  `diagnostics` (`src/lean.ts`).
+- **Serial execution.** Concurrent tool calls run through a queue, so every call
+  gets its own unique temporary file and scratch files do not interleave
+  (`src/lean.ts`).
+- **Timeout.** `simp`, `decide` and `norm_num` calls can run forever. On timeout
+  the process group is stopped with SIGTERM and then SIGKILL, and the model gets
+  an `error` with a simplification suggestion (`src/lean.ts`, `src/config.ts`).
+- **Temporary files.** Snippets are written under `.lean-mcp-tmp/` inside the
+  project (so Mathlib is on Lean's `LEAN_PATH`) and removed after every call. On
+  startup the server clears `Check_*.lean` files left by a previous crash
+  (`src/lean.ts`).
 
-## Üretim notları (operasyon)
+### Operational notes
 
-- **Temiz kapanma.** Sunucu `SIGTERM`/`SIGINT`/`SIGHUP` ya da stdio
-  bağlantısının kapanması durumunda devam eden tüm derlemeleri **süreç grubuyla
-  birlikte** (sunucu → `lake` → `lean`) sonlandırır ve anında çıkar. Bu, takılı
-  kalan bir taktiğin sunucu öldükten sonra sahipsiz (orphan) süreç olarak
-  çalışmaya devam etmesini engeller. İşletim mesajları yalnızca **stderr**'e
-  yazılır; stdout MCP protokolüne ayrılmıştır.
-- **Başlangıç denetimi.** Sunucu açılırken `LEAN_MCP_PROJECT_DIR`'in varlığını
-  ve `lake`'in erişilebilirliğini denetler; sorun varsa stderr'e uyarı basar
-  (çalışmayı durdurmaz, her çağrı yapılandırılmış bir hata döndürür).
-- **Yapılandırma hataları yapılandırılmış döner.** Proje dizini eksik veya
-  yazılamaz olduğunda `lean_check`, ham bir işletim sistemi hatası yerine
-  `isError: true` içeren şu yapıyı döndürür:
-  `{"status":"error","summary":"Lean çalıştırılamadı.","diagnostics":[...]}` —
-  hatanın nedeni ve proje dizini `diagnostics` içinde yer alır.
-- **Güvenlik notu.** Bu sunucu, modelin/gönderen istemcinin verdiği **her Lean
-  kodunu yerel makinede çalıştırır**; `#eval` keyfi hesaplama yürütür. Yalnızca
-  güvenilen tarafa (güvenilen model sağlayıcısına) açılmalı, uzak/anonim
-  istemcilere maruz bırakılmamalıdır.
-- **Yeniden derleme.** `npm run build` sonrası çalışan MCP süreci eski kodu
-  bellekte tutar; değişikliklerin etkili olması için sunucuyu yeniden başlatın
-  (OpenCode: `/api/experimental/mcp/lean/connect` sonrası `reload`).
+- **Clean shutdown.** On SIGTERM / SIGINT / SIGHUP or a closed stdio connection
+  the server terminates every in-flight compilation together with its process
+  group (server, then `lake`, then `lean`) and exits immediately. This prevents a stuck
+  tactic from continuing as an orphan process after the server dies. Operational
+  messages go only to stderr; stdout is reserved for the MCP protocol
+  (`src/index.ts`, `src/lean.ts`).
+- **Startup check.** On start the server checks that `LEAN_MCP_PROJECT_DIR`
+  exists and that `lake` is reachable; it prints a warning to stderr when
+  something is wrong (it does not stop; every call returns a structured error)
+  (`src/index.ts`).
+- **Configuration errors are returned structurally.** When the project directory
+  is missing or not writable, `lean_check` returns
+  `{"status":"error","summary":"Lean çalıştırılamadı.","diagnostics":[...]}`
+  with `isError: true`, and the cause and project directory appear in
+  `diagnostics` (`src/lean.ts`).
+- **Security note.** This server runs **every Lean snippet** supplied by the
+  model or the calling client on the local machine; `#eval` executes arbitrary
+  computation. Expose it only to a trusted party (a trusted model provider), and
+  not to remote or anonymous clients (`src/lean.ts`).
+- **Rebuild.** After `npm run build`, a running MCP process keeps the previous
+  code in memory; restart the server (or reconnect the MCP connection in your
+  client) for changes to take effect.
 
-## Geliştirme
+## Status
+
+Lean 4.34.1 and Mathlib v4.34.1 are installed and the cache has been fetched
+(`lean-project/lean-toolchain`, `lean-project/lakefile.lean`).
+
+Verified behaviors:
+
+- Tool contract: only `lean_check`, only a `code` input, only
+  `status` / `summary` / `diagnostics` in the output (`scripts/smoke.mjs`,
+  `scripts/smoke-call.mjs`).
+- A real compiler error is returned in `diagnostics` with its exact text (for
+  example `2:29: error: unsolved goals ⊢ False`) (`src/test/integration.test.ts`).
+- With `import Mathlib`, tactics such as `norm_num` and `omega` work
+  (`src/test/integration.test.ts`).
+- `theorem x : P := by sorry` compiles (Lean exit code 0) but the
+  ``declaration uses `sorry` `` warning is passed to the model in `diagnostics`
+  and the `summary` states that the proof is unfinished; a hollow proof does not
+  look finished (`src/lean.ts`, `src/test/integration.test.ts`).
+- `information`-level output such as `#check` / `#print` / `#eval` is returned
+  in `diagnostics`, so the model can query lemma statements
+  (`src/lean.ts`, `src/test/integration.test.ts`).
+- A wrong proof returns `status: "error"` with `isError: false` (the tool ran,
+  the code did not compile); `isError: true` appears only when the toolchain is
+  missing or a check times out (`src/index.ts`, `src/lean.ts`).
+- A timeout never locks up the server; the process is terminated and the model
+  is advised to simplify (`scripts/robustness.mjs`).
+- Concurrent calls are serialized and no scratch files leak
+  (`scripts/stress.mjs`, `src/test/integration.test.ts`).
+- The same snippet with and without Mathlib tactics gives different results,
+  proving the import path really works (`src/test/integration.test.ts`).
+
+Not done yet (out of scope for this pass): wiring into an OpenCode
+configuration and an end-to-end model trial through OpenChamber.
+
+## Development
 
 ```bash
-npm run build          # TypeScript derle
-npm test               # ayrıştırıcı birim testleri (Lean gerektirmez)
-npm run check          # tsc + birim testleri + smoke (hızlı CI)
-npm run test:all       # check + entegrasyon + smoke:call + stress + robustness
-npm run test:integration   # gerçek derleyiciye karşı testler
-npm run smoke          # stdio el sıkışması ve araç şeması kontrolü
-npm run smoke:call     # araç çağrısının baştan sona doğrulanması
-npm run smoke:stress   # eşzamanlı çağrılar ve geçici dosya sızıntısı kontrolü
-npm run robustness     # üretim davranışları: bozuk proje dizini, SIGTERM
-                       # sırasında süreç ağacı temizliği, zaman aşımı regresyonu
+npm run build          # compile TypeScript
+npm test               # parser unit tests (do not need Lean)
+npm run check          # tsc + unit tests + smoke (fast CI)
+npm run test:all       # check + integration + smoke:call + stress + robustness
+npm run test:integration   # tests against the real compiler
+npm run smoke          # stdio handshake and tool schema check
+npm run smoke:call     # end-to-end verification of a tool call
+npm run smoke:stress   # concurrent calls and scratch-file leak check
+npm run robustness     # production behaviors: broken project dir, process-tree
+                       # cleanup during SIGTERM, timeout regression
 ```
 
-Entegrasyon testleri `lake` PATH'te yoksa kendiliğinden atlanır. Mathlib'in
-derlenmiş olup olmadığını ayrıca denetler; `.lake/packages/mathlib` henüz
-indirilmemişse o tek test atlanır.
+Integration tests skip themselves automatically when `lake` is not on `PATH`.
+They also check whether Mathlib has been built; if
+`.lake/packages/mathlib` has not been fetched, that single test is skipped
+(`src/test/integration.test.ts`).
 
-## Durum
+## License
 
-Lean 4.34.1 ve Mathlib v4.34.1 kurulu, önbellek alınmış durumda.
+GPL-3.0-only. If you modify and distribute this repository, your derivative work
+must also be licensed under GPL-3.0. See the [LICENSE](LICENSE) file for the full
+source text.
 
-Doğrulanan davranışlar:
-
-- Araç sözleşmesi: yalnızca `lean_check`, yalnızca `code` girdisi,
-  yalnızca `status` / `summary` / `diagnostics` çıktısı.
-- Gerçek derleyici hatası `diagnostics` içinde, gerçek metniyle döner
-  (ör. `2:29: error: unsolved goals ⊢ False`).
-- `import Mathlib` ile `norm_num` ve `omega` gibi Mathlib taktikleri çalışır.
-- `theorem x : P := by sorry` derlenir (Lean'in çıkış kodu 0) ama
-  `declaration uses `sorry`` uyarısı `diagnostics` ile modele iletilir ve
-  `summary` ispatın tamamlanmadığını belirtir; boş ispat tamamlanmış gibi
-  görünmez.
-- `#check` / `#print` / `#eval` gibi `information` seviyeli çıktılar
-  `diagnostics` içinde döner; model lemma ifadelerini sorgulayabilir.
-- Hatalı bir ispat `isError: false` ile `status: "error"` döner (araç normal
-  çalıştı, kod derlenmedi); `isError: true` yalnızca araç zinciri eksik olduğunda
-  veya zaman aşımında görülür.
-- Zaman aşımı, kilitlenen taktiklerde sunucuyu asla kilitlemez; süreç
-  sonlandırılır ve modele sadeleştirme önerilir.
-- Eşzamanlı çağrılar serileştirilir; geçici dosya sızıntısı yoktur.
-- Aynı snippet'ın Mathlib taktikli ve taktiksiz hâlleri farklı sonuç verir;
-  yani içe aktarma yolunun gerçekten çalıştığı doğrulanır.
-
-Henüz yapılmayanlar (bu geçişte kapsam dışı bırakıldı): OpenCode
-yapılandırmasına bağlama ve OpenChamber üzerinden uçtan uca model denemesi.
-
-## Lisans
-
-GPL-3.0-only. Bu depoyu değiştirip dağıtırsanız türetilmiş çalışmanız da
-GPL-3.0 ile lisanslanmak zorundadır. Kaynak kod tam metni için [LICENSE](LICENSE)
-dosyasına bakın.
-
-Lean, Mathlib ve MCP SDK kapsam dışıdır; bunlar kendi lisanslarıyla dağıtılır.
+Lean, Mathlib and the MCP SDK are out of scope; they are distributed under their
+own licenses.
